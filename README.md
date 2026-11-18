@@ -28,7 +28,14 @@
 Windows 直接用官方独立 `yt-dlp.exe`（自带 Python，不受本机 Python 版本限制）。
 Linux/macOS 可 `pip install yt-dlp` 并把 `ffmpeg` 装上，代码会自动改用 PATH 中的 `yt-dlp`/`ffmpeg`。
 
-### 3. 启动
+### 3. 配置 AI 总结（可选）
+复制 `.env.example` 为 `.env`（已被 gitignore，不会入库），填入你的 DeepSeek API Key：
+```
+DEEPSEEK_API_KEY=sk-xxxx
+```
+不填也能正常用下载功能；AI 总结会提示「服务暂未开放」。
+
+### 4. 启动
 - Windows：双击 `start.bat`
 - 或命令行：
   ```bash
@@ -41,6 +48,9 @@ Linux/macOS 可 `pip install yt-dlp` 并把 `ffmpeg` 装上，代码会自动改
 |---|---|---|
 | `FREE_DAILY_LIMIT` | `5` | 每 IP 每日免费下载次数 |
 | `MAX_FILESIZE` | `500M` | 单文件下载大小上限（yt-dlp `--max-filesize`） |
+| `DEEPSEEK_API_KEY` | 空 | AI 总结必填，放 `.env` |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | 总结/问答模型名 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API 地址 |
 
 ---
 
@@ -53,6 +63,7 @@ Linux/macOS 可 `pip install yt-dlp` 并把 `ffmpeg` 装上，代码会自动改
 - **实时进度**：百分比 + 下载速度，前端轮询展示
 - **批量 / 合集**：多行链接（≤10）逐个解析；播放列表/合集解析（展示前 50 条）勾选下载
 - **字幕下载**：平台自带字幕时可选（yt-dlp `--write-subs`）
+- **AI 视频总结**：解析后点「✨ AI 总结」，几十秒出摘要、带时间戳章节大纲（可跳原视频）、思维导图、完整字幕，还能针对视频内容追问（每份总结 20 轮）；B站免登录取 AI 字幕，合集可逐 P 总结
 - **免费额度 + 会员引导**：每日限额，超额友好提示并引导价格区
 - **移动端适配**：375px 起完整可用
 - **自动清理**：服务器文件 1 小时后自动删除，不留存用户视频
@@ -61,13 +72,15 @@ Linux/macOS 可 `pip install yt-dlp` 并把 `ffmpeg` 装上，代码会自动改
 
 - **零改动封装 yt-dlp**：只用官方稳定接口（`-J`、`--print`、`--progress-template`），不解析易变的普通 stdout，yt-dlp 升级无需改代码
 - **抖音免登录方案**：服务端生成游客 `ttwid` + 分享页 SSR 数据 + `playwm→play` 去水印，全程不碰用户登录态
+- **B站免登录字幕**：弹幕接口 `x/v2/dm/view` 对游客返回字幕列表（含 AI 字幕），绕开有登录墙的 player 接口，无需任何 cookie
 - **轻量无数据库**：任务/额度/统计全内存，临时文件定时清理，单进程即可运行
 - **安全边界**：URL 协议白名单、子进程列表参数 + `--` 分隔防注入、清晰度/字幕参数正则校验、前端 HTML 转义防 XSS
 - **并发与体积保护**：下载并发 semaphore=3，单文件上限防磁盘被打爆
 
 ## 扩展方向（二期）
 
-- 视频 AI 总结、字幕翻译（接大模型接口）
+- 字幕翻译（接大模型接口）
+- AI 总结额度/会员 gating（开发期暂不限额）
 - 真实支付接入（微信/支付宝商户）+ 数据库持久化订单/额度
 - Docker 部署到服务器（注意海外平台需海外网络/代理）
 - 需登录平台改为「浏览器插件本地 cookie」模式（登录态只留在用户本机，不上服务端）
@@ -77,6 +90,7 @@ Linux/macOS 可 `pip install yt-dlp` 并把 `ffmpeg` 装上，代码会自动改
 
 - YouTube 等海外平台：国内网络/服务器直连不通，需海外服务器或代理
 - 需登录/已删除/风控视频无法下载（页面友好提示）
+- AI 总结仅支持有字幕的视频：抖音、无字幕视频友好提示暂不支持；B站依赖 dm/view 免登录口径，平台收紧需跟进
 - 抖音依赖分享页接口，平台改版需跟进维护
 - 无数据库：重启后额度/任务/统计清零
 

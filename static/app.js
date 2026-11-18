@@ -80,6 +80,7 @@ function renderVideoCard(info, url) {
       </div>
       <div class="video-actions">
         <button class="btn btn-primary dl-btn">下载到本地</button>
+        ${info.engine === "douyin" ? "" : '<button class="btn btn-ghost ai-btn">✨ AI 总结</button>'}
         <div class="progress-wrap hidden">
           <div class="progress-bar"><div class="progress-fill"></div></div>
           <div class="progress-text">排队中…</div>
@@ -87,7 +88,8 @@ function renderVideoCard(info, url) {
         <a class="btn btn-primary save-btn hidden" href="#">保存到本地</a>
         <span class="card-error hidden"></span>
       </div>
-    </div>`;
+    </div>
+    <div class="summary-panel hidden"></div>`;
   results.prepend(card);
   results.classList.remove("hidden");
 
@@ -130,6 +132,379 @@ function renderVideoCard(info, url) {
       handleError(e);
     }
   };
+
+  const aiBtn = card.querySelector(".ai-btn");
+  if (aiBtn) aiBtn.onclick = () => startSummarize(info, url, card, aiBtn);
+}
+
+/* ---------- AI summary ---------- */
+
+const SUM_STATUS_TEXT = { queued: "排队中…", fetching_subtitle: "正在获取字幕…", summarizing: "AI 正在总结…" };
+
+async function startSummarize(info, url, card, btn) {
+  const panel = card.querySelector(".summary-panel");
+  btn.disabled = true;
+  panel.classList.remove("hidden");
+  panel.innerHTML = '<div class="sum-status"><span class="spinner spinner-blue"></span><span class="sum-status-text">排队中…</span></div>';
+  try {
+    const { summary_id } = await api("/api/summarize", { url: info.webpage_url || url });
+    pollSummary(summary_id, panel, btn);
+  } catch (e) {
+    panel.innerHTML = `<div class="sum-error">${esc(e.message)}</div>`;
+    btn.disabled = false;
+    handleError(e);
+  }
+}
+
+function pollSummary(sid, panel, btn) {
+  const timer = setInterval(async () => {
+    let t;
+    try {
+      t = await api(`/api/summary/${sid}`);
+    } catch (e) {
+      clearInterval(timer);
+      panel.innerHTML = `<div class="sum-error">${esc(e.message)}</div>`;
+      btn.disabled = false;
+      return;
+    }
+    if (t.status === "done") {
+      clearInterval(timer);
+      btn.textContent = "✨ 已总结";
+      renderSummaryPanel(panel, t);
+    } else if (t.status === "error") {
+      clearInterval(timer);
+      panel.innerHTML = `<div class="sum-error">${esc(t.error)}</div>`;
+      btn.disabled = false;
+      btn.textContent = "✨ 重试总结";
+    } else {
+      const el = panel.querySelector(".sum-status-text");
+      if (el) el.textContent = SUM_STATUS_TEXT[t.status] || "处理中…";
+    }
+  }, 1000);
+}
+
+function fmtTs(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function tsToSeconds(ts) {
+  return String(ts).split(":").map(Number).reduce((acc, n) => acc * 60 + (n || 0), 0);
+}
+
+function jumpUrl(base, seconds) {
+  try {
+    const u = new URL(base);
+    u.searchParams.set("t", Math.floor(seconds));
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function renderSummaryPanel(panel, t) {
+  const r = t.result;
+  const notes = [];
+  if (t.subtitle_kind === "auto") notes.push("基于平台 AI 字幕，可能有识别误差");
+  if (t.partial) notes.push("视频较长，总结基于部分字幕");
+  panel.innerHTML = `
+    ${notes.length ? `<div class="sum-note">${notes.map(esc).join(" · ")}</div>` : ""}
+    <div class="sum-tabs">
+      <button class="sum-tab on" data-pane="summary"><span class="tab-ico">📝</span>总结摘要</button>
+      <button class="sum-tab" data-pane="cues"><span class="tab-ico">📄</span>字幕文本</button>
+      <button class="sum-tab" data-pane="mindmap"><span class="tab-ico">🧠</span>思维导图</button>
+      <button class="sum-tab" data-pane="chat"><span class="tab-ico">💬</span>AI 问答</button>
+    </div>
+    <div class="sum-pane" data-pane="summary">${summaryHtml(r, t.webpage_url)}</div>
+    <div class="sum-pane hidden" data-pane="cues">${cuesHtml(t.cues)}</div>
+    <div class="sum-pane hidden" data-pane="mindmap">
+      <div class="pane-tools">
+        <button class="btn btn-ghost btn-sm mm-png">导出 PNG</button>
+        <button class="btn btn-ghost btn-sm mm-md">导出 Markdown</button>
+      </div>
+      <div class="mindmap-wrap">${mindmapSvg(t.title, r)}</div>
+      <div class="mm-hint hidden">导图较宽，可左右滑动查看</div>
+    </div>
+    <div class="sum-pane hidden" data-pane="chat">${chatHtml(t.rounds_left)}</div>`;
+  panel.querySelectorAll(".sum-tab").forEach((tab) => {
+    tab.onclick = () => {
+      panel.querySelectorAll(".sum-tab").forEach((b) => b.classList.toggle("on", b === tab));
+      panel.querySelectorAll(".sum-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== tab.dataset.pane));
+      if (tab.dataset.pane === "mindmap") {
+        const w = panel.querySelector(".mindmap-wrap");
+        const svg = w.querySelector("svg");
+        w.scrollLeft = 0;
+        w.scrollTop = Math.max(0, (svg.clientHeight - w.clientHeight) / 2);
+        panel.querySelector(".mm-hint").classList.toggle("hidden", w.scrollWidth <= w.clientWidth);
+      }
+    };
+  });
+  panel.querySelector(".mm-png").onclick = () => exportMindmapPng(panel, t.title);
+  panel.querySelector(".mm-md").onclick = () => downloadBlob(`${safeFileName(t.title)}-思维导图.md`,
+    new Blob([mindmapMarkdown(t.title, r)], { type: "text/markdown;charset=utf-8" }));
+  panel.querySelector(".cue-srt").onclick = () => downloadBlob(`${safeFileName(t.title)}.srt`,
+    new Blob([cuesToSrt(t.cues)], { type: "text/plain;charset=utf-8" }));
+  panel.querySelector(".cue-txt").onclick = () => downloadBlob(`${safeFileName(t.title)}-字幕.txt`,
+    new Blob([cuesToTxt(t.cues)], { type: "text/plain;charset=utf-8" }));
+  bindChat(panel, t.id, t.rounds_left);
+}
+
+function summaryHtml(r, webpageUrl) {
+  return `
+    <p class="sum-abstract">${esc(r.summary)}</p>
+    <div class="chapter-list">
+      ${r.chapters.map((ch) => `
+        <div class="chapter-item">
+          <a class="ts-link" href="${esc(jumpUrl(webpageUrl, tsToSeconds(ch.timestamp)))}" target="_blank" rel="noopener" title="跳到视频对应位置">${esc(ch.timestamp)}</a>
+          <div class="chapter-body">
+            <div class="chapter-title">${esc(ch.title)}</div>
+            ${ch.points.length ? `<ul class="chapter-points">${ch.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}
+          </div>
+        </div>`).join("")}
+    </div>
+    ${r.highlights.length ? `
+      <div class="highlight-block">
+        <div class="highlight-head">✨ 核心亮点</div>
+        <ul class="highlight-list">${r.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
+      </div>` : ""}`;
+}
+
+const MM_COLORS = ["#1777FF", "#F59E0B", "#22C55E", "#EF4444", "#8B5CF6", "#14B8A6", "#EC4899", "#6366F1"];
+const MM_FONT = '13px system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
+
+function mindmapSvg(title, r) {
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.font = MM_FONT;
+  const width = (s) => ctx.measureText(s).width;
+  const GAP = 44, PAD = 24, LINE = 17;
+
+  const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+  const wrap = (s, per = 14, maxLines = 2) => {
+    const lines = [];
+    for (let i = 0; i < s.length && lines.length < maxLines; i += per) lines.push(s.slice(i, i + per));
+    if (lines.length === maxLines && s.length > per * maxLines) lines[maxLines - 1] = clip(lines[maxLines - 1], per - 1) + "…";
+    return lines;
+  };
+
+  const root = { text: clip(title || "视频主题", 20), depth: 0, color: "#1777FF", children: [] };
+  r.chapters.forEach((ch, i) => {
+    const color = MM_COLORS[i % MM_COLORS.length];
+    root.children.push({
+      text: clip(ch.title, 16), depth: 1, color,
+      children: ch.points.map((p) => ({ text: p, depth: 2, color, children: [] })),
+    });
+  });
+
+  const maxW = [0, 0, 0];
+  const prep = (n) => {
+    n.lines = n.depth === 2 ? wrap(n.text) : [n.text];
+    n.w = Math.max(...n.lines.map(width));
+    n.h = n.depth === 2 ? n.lines.length * LINE + 10 : 26;
+    maxW[n.depth] = Math.max(maxW[n.depth], n.w);
+    if (!n.children.length) { n.leaves = 1; return 1; }
+    n.leaves = n.children.reduce((s, c) => s + prep(c), 0);
+    return n.leaves;
+  };
+  prep(root);
+  const depthX = [PAD];
+  for (let d = 1; d <= 2; d++) depthX[d] = depthX[d - 1] + maxW[d - 1] + GAP;
+  const totalW = depthX[2] + maxW[2] + PAD;
+
+  let cursor = PAD / 2;
+  const place = (n) => {
+    n.x = depthX[n.depth];
+    if (!n.children.length) { n.y = cursor + n.h / 2; cursor += n.h + 6; }
+    else { n.children.forEach(place); n.y = (n.children[0].y + n.children[n.children.length - 1].y) / 2; }
+  };
+  place(root);
+  const totalH = cursor + PAD / 2;
+
+  const edges = [], nodes = [];
+  const walk = (n) => {
+    const hasDot = n.depth < 2;
+    const startX = n.x + n.w + (hasDot ? 12 : 0);
+    n.children.forEach((c) => {
+      const endX = c.x - 6;
+      const midX = (startX + endX) / 2;
+      edges.push(`<path d="M ${startX} ${n.y} C ${midX} ${n.y}, ${midX} ${c.y}, ${endX} ${c.y}" fill="none" stroke="${c.color}" stroke-width="1.6" opacity="${n.depth === 0 ? 0.9 : 0.55}"/>`);
+      walk(c);
+    });
+    const lastY = n.y + ((n.lines.length - 1) / 2) * LINE;
+    n.lines.forEach((ln, i) => {
+      const y = n.y + (i - (n.lines.length - 1) / 2) * LINE + 4;
+      nodes.push(`<text x="${n.x}" y="${y}" font-size="13" fill="${n.depth === 2 ? "#475569" : "#0F172A"}" font-weight="${n.depth < 2 ? 700 : 400}">${esc(ln)}</text>`);
+    });
+    nodes.push(`<line x1="${n.x}" y1="${lastY + 9}" x2="${n.x + n.w}" y2="${lastY + 9}" stroke="${n.color}" stroke-width="1.4" opacity="${n.depth === 2 ? 0.45 : 0.9}"/>`);
+    if (hasDot) nodes.push(`<circle cx="${n.x + n.w + 7}" cy="${n.y}" r="3.5" fill="#fff" stroke="${n.color}" stroke-width="1.6"/>`);
+  };
+  walk(root);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(totalW)}" height="${Math.ceil(totalH)}" viewBox="0 0 ${Math.ceil(totalW)} ${Math.ceil(totalH)}" font-family='system-ui, "PingFang SC", "Microsoft YaHei", sans-serif'>${edges.join("")}${nodes.join("")}</svg>`;
+}
+
+function mindmapMarkdown(title, r) {
+  const lines = [`# ${title || "视频主题"}`, ""];
+  r.chapters.forEach((ch) => {
+    lines.push(`## ${ch.title}`, "");
+    ch.points.forEach((p) => lines.push(`- ${p}`));
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function safeFileName(s) {
+  return String(s || "video").replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 60) || "video";
+}
+
+function downloadBlob(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function exportMindmapPng(panel, title) {
+  const svg = panel.querySelector(".mindmap-wrap svg");
+  if (!svg) return toast("思维导图还没生成好");
+  const w = +svg.getAttribute("width"), h = +svg.getAttribute("height");
+  const xml = new XMLSerializer().serializeToString(svg);
+  const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = w * 2; canvas.height = h * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob((b) => {
+      if (b) downloadBlob(`${safeFileName(title)}-思维导图.png`, b);
+      else toast("导出失败了，再试一次");
+    }, "image/png");
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("导出失败了，再试一次"); };
+  img.src = url;
+}
+
+function srtTs(sec) {
+  const ms = Math.round((sec % 1) * 1000);
+  const s = Math.floor(sec);
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss},${String(ms).padStart(3, "0")}`;
+}
+
+function cuesToSrt(cues) {
+  return cues.map((c, i) => `${i + 1}\n${srtTs(c.start)} --> ${srtTs(c.end)}\n${c.text}\n`).join("\n");
+}
+
+function cuesToTxt(cues) {
+  return cues.map((c) => `[${fmtTs(c.start)}] ${c.text}`).join("\n");
+}
+
+function cuesHtml(cues) {
+  return `
+    <div class="pane-tools">
+      <button class="btn btn-ghost btn-sm cue-srt">导出 SRT</button>
+      <button class="btn btn-ghost btn-sm cue-txt">导出 TXT</button>
+    </div>
+    <details class="cue-details" open>
+      <summary>完整字幕（${cues.length} 条）</summary>
+      <div class="cue-list">
+        ${cues.map((c) => `<div class="cue-item"><span class="cue-ts">${esc(fmtTs(c.start))}</span><span>${esc(c.text)}</span></div>`).join("")}
+      </div>
+    </details>`;
+}
+
+function chatHtml(roundsLeft) {
+  return `
+    <div class="chat-box">
+      <div class="chat-msgs"><div class="chat-msg ai">关于这个视频，想问点什么？</div></div>
+      <div class="chat-input-row">
+        <input class="chat-input" type="text" maxlength="500" placeholder="比如：视频里举了哪些例子？">
+        <button class="btn btn-primary btn-sm chat-send">发送</button>
+      </div>
+      <div class="chat-left">剩余提问次数：<b class="chat-rounds">${roundsLeft}</b></div>
+    </div>`;
+}
+
+function bindChat(panel, sid, roundsLeft) {
+  const msgs = panel.querySelector(".chat-msgs");
+  const input = panel.querySelector(".chat-input");
+  const send = panel.querySelector(".chat-send");
+  const roundsEl = panel.querySelector(".chat-rounds");
+  let left = roundsLeft;
+
+  const doSend = async () => {
+    const q = input.value.trim();
+    if (!q) return;
+    if (left <= 0) return toast("本次总结的问答次数用完啦，重新生成一份总结即可继续");
+    input.value = "";
+    msgs.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${esc(q)}</div>`);
+    const reply = document.createElement("div");
+    reply.className = "chat-msg ai";
+    reply.textContent = "思考中…";
+    msgs.appendChild(reply);
+    msgs.scrollTop = msgs.scrollHeight;
+    input.disabled = send.disabled = true;
+    let started = false;
+    try {
+      const res = await fetch(`/api/summary/${sid}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || "出了点问题，稍后再试");
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const chunk = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            let ev;
+            try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+            if (ev.delta) {
+              if (!started) { reply.textContent = ""; started = true; }
+              reply.textContent += ev.delta;
+              msgs.scrollTop = msgs.scrollHeight;
+            } else if (ev.done) {
+              left = ev.rounds_left;
+              roundsEl.textContent = left;
+            } else if (ev.error) {
+              throw new Error(ev.error);
+            }
+          }
+        }
+      }
+      if (!started) throw new Error("AI 返回的内容有点问题，再试一次");
+    } catch (e) {
+      reply.textContent = e.message;
+      reply.classList.add("err");
+    } finally {
+      input.disabled = send.disabled = false;
+      input.focus();
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  };
+  send.onclick = doSend;
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
 }
 
 function pollTask(taskId, ui) {
@@ -190,9 +565,11 @@ function renderPlaylistCard(info, url) {
         <label class="playlist-item">
           <input type="checkbox"${checkAll ? " checked" : ""} data-i="${i}">
           <span class="pi-title">${esc(e.title)}</span>
+          <button class="btn btn-ghost btn-sm pi-ai" data-i="${i}" type="button">✨ 总结</button>
           <span class="pi-status" data-i="${i}">${e.duration ? fmtDuration(e.duration) : ""}</span>
         </label>`).join("")}
-    </div>`;
+    </div>
+    <div class="summary-panel hidden"></div>`;
   results.prepend(card);
   results.classList.remove("hidden");
 
@@ -202,6 +579,14 @@ function renderPlaylistCard(info, url) {
     boxes.forEach((b) => { b.checked = toCheck; });
     ev.target.textContent = toCheck ? "全不选" : "全选";
   };
+
+  card.querySelectorAll(".pi-ai").forEach((btn) => {
+    btn.onclick = (ev) => {
+      ev.preventDefault();
+      const entry = info.entries[+btn.dataset.i];
+      startSummarize({ webpage_url: entry.url, title: entry.title }, entry.url, card, btn);
+    };
+  });
 
   card.querySelector(".pl-dl").onclick = async () => {
     const btn = card.querySelector(".pl-dl");

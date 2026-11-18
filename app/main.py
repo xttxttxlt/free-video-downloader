@@ -2,11 +2,12 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import downloader as dl
+from . import summarizer as sm
 
 app = FastAPI(title="FlashSave")
 
@@ -20,6 +21,14 @@ class DownloadReq(BaseModel):
     choice: str = "best"
     title: str | None = None
     subtitle: str | None = None
+
+
+class SummarizeReq(BaseModel):
+    url: str
+
+
+class ChatReq(BaseModel):
+    question: str
 
 
 def _ip(request: Request):
@@ -79,9 +88,44 @@ def api_stats():
     return {"downloads": dl.stats["downloads"]}
 
 
+@app.post("/api/summarize")
+def api_summarize(body: SummarizeReq):
+    try:
+        return {"summary_id": sm.start_summary(body.url)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/summary/{summary_id}")
+def api_summary(summary_id: str):
+    task = sm.summaries.get(summary_id)
+    if not task:
+        raise HTTPException(404, "总结不存在或已过期")
+    return sm.public_view(task)
+
+
+@app.post("/api/summary/{summary_id}/chat")
+def api_summary_chat(summary_id: str, body: ChatReq):
+    task = sm.summaries.get(summary_id)
+    if not task or task["status"] != "done":
+        raise HTTPException(404, "总结不存在或尚未完成")
+    try:
+        question = sm.prepare_chat(task, body.question)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return StreamingResponse(
+        sm.stream_chat(task, question),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.on_event("startup")
 def _startup():
     threading.Thread(target=dl.cleanup_loop, daemon=True).start()
+    threading.Thread(target=sm.cleanup_loop, daemon=True).start()
 
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
