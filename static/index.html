@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>闪存视频 - 全网视频一键保存 | B站抖音视频下载</title>
+<meta name="description" content="粘贴链接就能下载，支持B站、抖音等1000+平台，高清原画、批量下载、仅音频MP3，手机电脑都能用。">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231777FF'/><path d='M50 22v34M36 44l14 14 14-14M28 72h44' stroke='white' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M7 10l5 5 5-5M5 19h14"/></svg>
+      </span>
+      <span class="brand-name">闪存视频</span>
+    </a>
+    <div class="nav-links">
+      <a href="#top" class="active">下载视频</a>
+      <a href="#platforms">支持平台</a>
+      <a href="#features">功能亮点</a>
+      <a href="#pricing">会员套餐</a>
+      <a href="#faq">常见问题</a>
+    </div>
+    <a href="#pricing" class="btn btn-primary btn-sm nav-cta">开通会员</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <h1>全网视频，<span class="hl">一键保存</span></h1>
+  <p class="hero-sub">粘贴链接就能下，高清原画 · 批量下载 · 手机电脑都能用</p>
+
+  <div class="search-shell">
+    <div class="search-pill" id="singleMode">
+      <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+      <input id="urlInput" type="url" placeholder="粘贴视频链接，比如 B站 / 抖音的分享链接" autocomplete="off">
+      <button class="btn btn-primary search-btn" id="parseBtn">解析视频</button>
+    </div>
+    <div class="batch-box hidden" id="batchMode">
+      <textarea id="batchInput" rows="5" placeholder="一行一个链接，最多 10 个&#10;https://www.bilibili.com/video/BV...&#10;https://v.douyin.com/..."></textarea>
+      <button class="btn btn-primary" id="batchParseBtn">批量解析</button>
+    </div>
+    <button class="batch-toggle" id="batchToggle">要下好几个？试试批量下载 →</button>
+  </div>
+
+  <div class="trust-strip">
+    <span class="trust-item"><span class="dot"></span>服务正常</span>
+    <span class="sep"></span>
+    <span class="trust-item">支持 <b>1000+</b> 平台</span>
+    <span class="sep"></span>
+    <span class="trust-item">今日已下载 <b id="statDownloads">0</b> 个</span>
+    <span class="sep"></span>
+    <span class="trust-item">今日免费额度剩 <b id="statQuota">-</b> 次</span>
+  </div>
+
+  <div class="platform-chips" id="platforms">
+    <span class="chip chip-hot">📺 B站</span>
+    <span class="chip chip-hot">🎵 抖音</span>
+    <span class="chip">⚡ 快手</span>
+    <span class="chip">▶️ YouTube</span>
+    <span class="chip">📕 小红书</span>
+    <span class="chip">🔥 微博</span>
+    <span class="chip">🍉 西瓜视频</span>
+    <span class="chip">🐦 X / Twitter</span>
+    <span class="chip">📷 Instagram</span>
+    <span class="chip">🎬 腾讯视频</span>
+    <span class="chip">🥝 爱奇艺</span>
+    <span class="chip">＋ 更多平台</span>
+  </div>
+</header>
+
+<main>
+  <section class="results hidden" id="results"></section>
+
+  <section class="features" id="features">
+    <h2>为什么大家都在用<span class="hl">闪存视频</span></h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-emoji">⚡</div>
+        <h3>贴链接就下</h3>
+        <p>不用装软件、不用注册，复制分享链接粘进来，几秒钟出结果。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">🎬</div>
+        <h3>高清原画</h3>
+        <p>平台有多清晰就能下多清晰，1080P、4K 随心选，还能只存 MP3。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">📦</div>
+        <h3>批量下载</h3>
+        <p>一次贴一排链接，整个合集挨个下好，不用一条条重复操作。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">📱</div>
+        <h3>手机也能用</h3>
+        <p>网页打开就能下，通勤路上刷到好视频，随手存进手机相册。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing" id="pricing">
+    <h2>选个适合你的<span class="hl">套餐</span></h2>
+    <p class="section-sub">免费版够日常用，重度下载党选会员更划算</p>
+    <div class="price-grid">
+      <div class="price-card">
+        <h3>免费版</h3>
+        <div class="price">¥0<span>/永久</span></div>
+        <ul>
+          <li>✔ 每天 5 次下载</li>
+          <li>✔ 最高 1080P 清晰度</li>
+          <li>✔ 支持全部平台</li>
+          <li>✔ 仅音频 MP3</li>
+        </ul>
+        <button class="btn btn-ghost price-btn" onclick="document.getElementById('urlInput').focus();window.scrollTo({top:0,behavior:'smooth'})">免费开始</button>
+      </div>
+      <div class="price-card price-card-hot">
+        <div class="hot-badge">最受欢迎</div>
+        <h3>月度会员</h3>
+        <div class="price">¥9.9<span>/月</span></div>
+        <ul>
+          <li>✔ 下载次数不限</li>
+          <li>✔ 4K 超清 + 批量下载</li>
+          <li>✔ 下载队列优先处理</li>
+          <li>✔ 字幕下载 + 新功能的抢先体验</li>
+        </ul>
+        <button class="btn btn-primary price-btn" disabled>即将开放</button>
+      </div>
+      <div class="price-card">
+        <h3>年度会员</h3>
+        <div class="price">¥59<span>/年 · 相当于 ¥4.9/月</span></div>
+        <ul>
+          <li>✔ 月度会员全部权益</li>
+          <li>✔ 一年省下 ¥60</li>
+          <li>✔ 视频 AI 总结（规划中）</li>
+          <li>✔ 字幕翻译（规划中）</li>
+        </ul>
+        <button class="btn btn-ghost price-btn" disabled>即将开放</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <h2>常见<span class="hl">问题</span></h2>
+    <details>
+      <summary>支持哪些平台？</summary>
+      <p>底层使用开源下载引擎 yt-dlp，理论上支持 1000+ 网站。B站、抖音已实测可用；部分平台（如 YouTube）对网络环境有要求，个别需要登录的视频暂时下不了。</p>
+    </details>
+    <details>
+      <summary>为什么有的链接解析失败？</summary>
+      <p>可能是视频被删除、需要登录、平台风控，或链接不完整。换成完整的分享链接再试一次；还不行就换个视频试试。</p>
+    </details>
+    <details>
+      <summary>下载的文件会保存多久？</summary>
+      <p>解析完成后请及时点"保存到本地"。服务器上的文件 1 小时后自动删除，我们不留存你的任何视频。</p>
+    </details>
+    <details>
+      <summary>手机上怎么用？</summary>
+      <p>在 App 里点"分享 → 复制链接"，打开本站粘贴解析，下载后在浏览器下载列表里就能找到，可保存到相册。</p>
+    </details>
+    <details>
+      <summary>可以商用吗？</summary>
+      <p>不可以。本工具仅供个人学习和备份，下载内容的版权归原作者所有，请勿二次传播或用于商业用途。</p>
+    </details>
+  </section>
+</main>
+
+<footer class="footer">
+  <p>仅供个人学习与备份 · 请尊重版权 · 勿用于商业用途</p>
+  <p>© 2026 闪存视频 FlashSave · 下载引擎基于开源项目 yt-dlp</p>
+</footer>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
