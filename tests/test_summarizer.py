@@ -1,6 +1,6 @@
 import pytest
 
-from app import summarizer as sm
+from backend import summarizer as sm
 
 BCC_FIXTURE = {"body": [
     {"from": 12.86, "to": 14.5, "sid": 1, "location": 2, "content": "好大家好啊", "music": 0.0},

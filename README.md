@@ -35,13 +35,24 @@ DEEPSEEK_API_KEY=sk-xxxx
 ```
 不填也能正常用下载功能；AI 总结会提示「服务暂未开放」。
 
-### 4. 启动
-- Windows：双击 `start.bat`
-- 或命令行：
+### 4. 启动（前后端分离脚本）
+前端为 Vue 3 + Vite + Tailwind CSS 工程（`frontend/`），后端为 FastAPI（`backend/`）。Windows 下两个脚本各管一摊：
+
+| 脚本 | 作用 | 地址 |
+|---|---|---|
+| `start-backend.bat` | 启动后端 API（uvicorn） | http://127.0.0.1:8000（接口文档 `/docs`） |
+| `start-frontend.bat` | 安装依赖 + 启动 Vite 开发服务器（热更新，`/api` 代理到后端 8000） | http://localhost:5173 |
+
+- 先双击 `start-backend.bat`，再双击 `start-frontend.bat`，打开 http://localhost:5173 即可使用（改前端代码即时热更新）。
+- 命令行等价：
   ```bash
-  .venv/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+  # 后端
+  .venv/Scripts/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+  # 前端
+  cd frontend && npm install && npm run dev
   ```
-- 打开 http://127.0.0.1:8000
+
+> **生产单进程**：先 `cd frontend && npm run build` 生成 `frontend/dist`，后端检测到该目录会直接托管构建产物，此时只跑 `start-backend.bat`、访问 http://127.0.0.1:8000 即可（无需前端服务器）；`dist` 不存在时后端以纯 API 模式启动。
 
 ### 可选环境变量
 | 变量 | 默认 | 说明 |
@@ -97,4 +108,4 @@ DEEPSEEK_API_KEY=sk-xxxx
 ## 目录与文档
 
 - 需求与设计见 [docs/需求分析.md](docs/需求分析.md)、[docs/方案设计.md](docs/方案设计.md)
-- 代码结构：`app/`（后端）、`static/`（前端）、`tools/`（下载工具）、`downloads/`（临时文件）
+- 代码结构：`backend/`（FastAPI 后端）、`frontend/`（Vue 3 + Vite + Tailwind CSS 前端，构建产物在 `frontend/dist`）、`tools/`（下载工具）、`downloads/`（临时文件）

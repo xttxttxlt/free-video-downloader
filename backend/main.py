@@ -128,5 +128,6 @@ def _startup():
     threading.Thread(target=sm.cleanup_loop, daemon=True).start()
 
 
-static_dir = Path(__file__).resolve().parent.parent / "static"
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if static_dir.is_dir():
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

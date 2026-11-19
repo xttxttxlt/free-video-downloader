@@ -1,7 +1,10 @@
 .venv/
 __pycache__/
+.pytest_cache/
 tools/
 downloads/
 .design/
 .playwright-mcp/
 .env
+node_modules/
+frontend/dist/
